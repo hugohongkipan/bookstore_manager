@@ -208,7 +208,8 @@ def update_sale(conn: sqlite3.Connection) -> None:
 
         # Enter 鍵退出，回首頁
         if sid == "":
-            os.system("clear")
+            # os.system("clear")
+            os.system("cls")
             main()
             break
 
@@ -274,7 +275,8 @@ def delete_sale(conn: sqlite3.Connection) -> None:
 
         # Enter 鍵退出，回首頁
         if sid == "":
-            os.system("clear")
+            # os.system("clear")
+            os.system("cls")
             main()
             break
 
@@ -363,9 +365,11 @@ def main():
         print("=> 請輸入有效的選項（1-5）")
         main()
 
+    # 若是MacOS系統為clear，windows為cls
     back = input("\n=> 按 Enter 返回頁面")
     if back == "":
-        os.system("clear")
+        # os.system("clear")
+        os.system("cls")
         main()
     conn.close()
 
