@@ -5,12 +5,24 @@ DB_NAME = "bookstore.db"  # 你可以視情況修改檔名
 
 
 def connect_db() -> sqlite3.Connection:
+    """
+    建立並回傳與 SQLite 資料庫的連線物件
+
+    Returns:
+        sqlite3.Connection: 資料庫連線物件
+    """
     conn = sqlite3.connect(DB_NAME)  # 連線資料庫
     conn.row_factory = sqlite3.Row  # 設置row_factory
     return conn
 
 
 def initialize_db(conn: sqlite3.Connection) -> None:
+    """
+    初始化資料庫，建立所需的資料表與範例資料
+
+    Args:
+        conn (sqlite3.Connection): 資料庫連線物件
+    """
     cursor = conn.cursor()  # 建立 cursor 物件
     try:
         # 建立範例資料表
@@ -65,13 +77,26 @@ def initialize_db(conn: sqlite3.Connection) -> None:
 def add_sale(conn: sqlite3.Connection, sdate: str, mid: str, bid: str,
              sqty: int, sdiscount: int) -> tuple[bool, str]:
     cursor = conn.cursor()
+    """
+    新增一筆銷售資料，並檢查會員是否存在與書籍庫存是否足夠
 
-    # 驗證會員是否存在
+    Args:
+        conn (sqlite3.Connection): 資料庫連線物件
+        sdate (str): 銷售日期 (格式 YYYY-MM-DD)
+        mid (str): 會員編號
+        bid (str): 書籍編號
+        sqty (int): 銷售數量
+        sdiscount (int): 折扣金額
+
+    Returns:
+        tuple[bool, str]: 操作是否成功與相關訊息
+    """
+    # 檢查會員是否存在
     cursor.execute("SELECT mid FROM member WHERE mid = ?", (mid, ))
     if cursor.fetchone() is None:
         return False, "錯誤：會員編號或書籍編號無效"
 
-    # 驗證書籍是否存在
+    # 檢查書籍是否存在
     cursor.execute("SELECT bid FROM book WHERE bid = ?", (bid, ))
     if cursor.fetchone() is None:
         return False, "錯誤：會員編號或書籍編號無效"
@@ -100,8 +125,6 @@ def add_sale(conn: sqlite3.Connection, sdate: str, mid: str, bid: str,
         cursor.execute("UPDATE book SET bstock = bstock - ? WHERE bid = ?",
                        (sqty, bid))
         conn.commit()
-
-    # 避免出現sqlite3.OperationalError: database is locked
     conn.close()
 
     # 若上面檢查皆OK，那就傳回已新增的訊息
@@ -109,6 +132,12 @@ def add_sale(conn: sqlite3.Connection, sdate: str, mid: str, bid: str,
 
 
 def print_sale_report(conn: sqlite3.Connection) -> None:
+    """
+    顯示所有銷售記錄的詳細報表
+
+    Args:
+        conn (sqlite3.Connection): 資料庫連線物件
+    """
     cursor = conn.cursor()
     # 使用inner join找出我們需要印出的資料
     cursor.execute("""SELECT sid, sdate, mname, btitle,
@@ -148,6 +177,12 @@ def print_sale_report(conn: sqlite3.Connection) -> None:
 
 
 def update_sale(conn: sqlite3.Connection) -> None:
+    """
+    讓使用者選擇並更新一筆銷售記錄的折扣與總額
+
+    Args:
+        conn (sqlite3.Connection): 資料庫連線物件
+    """
     cursor = conn.cursor()
     print("\n======== 銷售記錄列表 ========")
     cursor.execute("""SELECT sid, mname, sdate FROM sale AS s
@@ -179,7 +214,7 @@ def update_sale(conn: sqlite3.Connection) -> None:
 
         # 若不存在就輸出查無此筆資料
         if cursor.fetchone() is None:
-            print("=> 錯誤：銷售編號無效，請再輸入一次")
+            print("=> 錯誤：請輸入有效的數字")
             continue
         break
 
@@ -208,7 +243,57 @@ def update_sale(conn: sqlite3.Connection) -> None:
     print(f"=> 銷售編號 {sid} 已更新！(銷售總額: {stotal})")
 
 
+def delete_sale(conn: sqlite3.Connection) -> None:
+    """
+    讓使用者選擇並刪除一筆銷售記錄
+
+    Args:
+        conn (sqlite3.Connection): 資料庫連線物件
+    """
+    cursor = conn.cursor()
+    print("\n======== 銷售記錄列表 ========")
+    cursor.execute("""SELECT sid, mname, sdate FROM sale AS s
+                   INNER JOIN member AS m ON s.mid = m.mid
+                   ORDER BY sid ASC""")
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("=> 目前沒有銷售資料")
+        return
+    n = 1
+
+    for row in rows:
+        print("{0}. 銷售編號: {1} - 會員: {2} - 日期: {3}"
+              .format(n, row["sid"], row["mname"], row["sdate"]))
+        n += 1
+    print("================================")
+
+    while True:
+        sid = input("請選擇要刪除的銷售編號 (輸入數字或按 Enter 取消): ")
+        cursor.execute("SELECT sid FROM sale WHERE sid = ?", (sid, ))
+
+        # Enter 鍵退出，回首頁
+        if sid == "":
+            os.system("clear")
+            main()
+            break
+
+        # 若不存在就輸出查無此筆資料
+        if cursor.fetchone() is None:
+            print("=> 錯誤：請輸入有效的數字")
+            continue
+        break
+
+    cursor.execute("DELETE FROM sale WHERE sid = ?", (sid, ))
+    conn.commit()
+    conn.close()
+    print(f"=> 銷售編號 {sid} 已刪除")
+
+
 def main():
+    """
+    主程式入口，顯示功能選單並呼叫對應功能
+    """
     conn = connect_db()
     initialize_db(conn)
     print("***************選單***************")
@@ -221,7 +306,16 @@ def main():
     choice = input("請選擇操作項目(Enter 離開)：")
 
     if choice == "1":
-        sdate = input("請輸入銷售日期 (YYYY-MM-DD)：")
+
+        # 檢查日期格式
+        while True:
+            sdate = input("請輸入銷售日期 (YYYY-MM-DD)：")
+            if len(sdate) == 10 and sdate[4] == "-" and sdate[7] == "-":
+                break
+            else:
+                print("=> 錯誤：日期格式錯誤，請重新輸入")
+                continue
+
         mid = input("請輸入會員編號：")
         bid = input("請輸入書籍編號：")
 
@@ -259,14 +353,20 @@ def main():
         update_sale(connect_db())
 
     elif choice == "4":
-        print("4")
+        delete_sale(connect_db())
+
     # choice == "" >>> 直接Enter離開
     elif choice == "5" or choice == "":
         exit()
+
     else:
         print("=> 請輸入有效的選項（1-5）")
         main()
 
+    back = input("\n=> 按 Enter 返回頁面")
+    if back == "":
+        os.system("clear")
+        main()
     conn.close()
 
 
